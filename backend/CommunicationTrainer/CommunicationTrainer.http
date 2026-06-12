@@ -1,0 +1,6 @@
+@CommunicationTrainer_HostAddress = http://localhost:5081
+
+GET {{CommunicationTrainer_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
