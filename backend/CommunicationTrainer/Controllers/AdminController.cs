@@ -3,11 +3,13 @@ using Microsoft.EntityFrameworkCore;
 using CommunicationTrainer.Api.Data;
 using CommunicationTrainer.Api.DTOs;
 using CommunicationTrainer.Api.Models;
+using Microsoft.AspNetCore.Authorization;
 
 namespace CommunicationTrainer.Api.Controllers;
 
 [ApiController]
 [Route("api/admin")]
+[Authorize(Roles = "admin")]
 public class AdminController : ControllerBase
 {
     private readonly AppDbContext _db;
@@ -41,6 +43,62 @@ public class AdminController : ControllerBase
             ))
             .ToListAsync();
     }
+    /// <summary>
+    /// Получить всех пользователей
+    /// </summary>
+    [HttpGet("users")]
+    public async Task<List<UserAdminDto>> GetUsers()
+    {
+        return await _db.Users
+            .OrderByDescending(u => u.CreatedAt)
+            .Select(u => new UserAdminDto(
+                u.Id,
+                u.Email,
+                u.Name,
+                u.Role,
+                u.CreatedAt,
+                u.TrainingSessions.Count,
+                u.TrainingSessions.Count(s => s.Status == "completed")
+            ))
+            .ToListAsync();
+    }
+
+    /// <summary>
+    /// Изменить роль пользователя
+    /// </summary>
+    [HttpPut("users/{userId}/role")]
+    public async Task<UserAdminDto> UpdateUserRole(Guid userId, [FromBody] UpdateRoleRequest req)
+    {
+        var user = await _db.Users.FindAsync(userId)
+                   ?? throw new Exception("Пользователь не найден");
+
+        user.Role = req.Role;
+        await _db.SaveChangesAsync();
+
+        var sessions = await _db.TrainingSessions.CountAsync(s => s.UserId == userId);
+        var completed = await _db.TrainingSessions.CountAsync(s => s.UserId == userId && s.Status == "completed");
+
+        return new UserAdminDto(user.Id, user.Email, user.Name, user.Role, user.CreatedAt, sessions, completed);
+    }
+
+    /// <summary>
+    /// Удалить пользователя
+    /// </summary>
+    [HttpDelete("users/{userId}")]
+    public async Task DeleteUser(Guid userId)
+    {
+        var user = await _db.Users.FindAsync(userId)
+                   ?? throw new Exception("Пользователь не найден");
+
+        // Отвязываем сессии (ставим UserId = null, а не удаляем)
+        var sessions = await _db.TrainingSessions.Where(s => s.UserId == userId).ToListAsync();
+        foreach (var session in sessions)
+            session.UserId = null;
+
+        _db.Users.Remove(user);
+        await _db.SaveChangesAsync();
+    }
+
 
     [HttpGet("scenarios/{id}")]
     public async Task<ScenarioFullDto> GetScenario(int id)
@@ -199,6 +257,154 @@ public class AdminController : ControllerBase
             phrase.EmotionalScore, phrase.SafetyScore, phrase.StructuralScore
         );
     }
+    
+    /// <summary>
+/// Получить все форматы с полными данными
+/// </summary>
+[HttpGet("formats/full")]
+public async Task<List<FormatFullDto>> GetFormatsFull()
+{
+    return await _db.Formats
+        .OrderBy(f => f.SortOrder)
+        .Select(f => new FormatFullDto(
+            f.Id,
+            f.Code,
+            f.Name,
+            f.Description ?? "",
+            f.Color ?? "#999",
+            f.IdealEmotional,
+            f.IdealSafety,
+            f.IdealStructural,
+            f.ToleranceEmotional,
+            f.ToleranceSafety,
+            f.ToleranceStructural,
+            f.WeightEmotional,
+            f.WeightSafety,
+            f.WeightStructural,
+            f.SortOrder
+        ))
+        .ToListAsync();
+}
+
+/// <summary>
+/// Обновить формат
+/// </summary>
+[HttpPut("formats/{id}")]
+public async Task<FormatFullDto> UpdateFormat(int id, [FromBody] UpdateFormatRequest req)
+{
+    var format = await _db.Formats.FindAsync(id)
+        ?? throw new Exception("Формат не найден");
+
+    format.Name = req.Name;
+    format.Description = req.Description;
+    format.Color = req.Color;
+    format.IdealEmotional = req.IdealEmotional;
+    format.IdealSafety = req.IdealSafety;
+    format.IdealStructural = req.IdealStructural;
+    format.ToleranceEmotional = req.ToleranceEmotional;
+    format.ToleranceSafety = req.ToleranceSafety;
+    format.ToleranceStructural = req.ToleranceStructural;
+    format.WeightEmotional = req.WeightEmotional;
+    format.WeightSafety = req.WeightSafety;
+    format.WeightStructural = req.WeightStructural;
+    format.SortOrder = req.SortOrder;
+
+    await _db.SaveChangesAsync();
+
+    return new FormatFullDto(
+        format.Id, format.Code, format.Name, format.Description ?? "",
+        format.Color ?? "#999",
+        format.IdealEmotional, format.IdealSafety, format.IdealStructural,
+        format.ToleranceEmotional, format.ToleranceSafety, format.ToleranceStructural,
+        format.WeightEmotional, format.WeightSafety, format.WeightStructural,
+        format.SortOrder
+    );
+}
+
+/// <summary>
+/// Сбросить веса фраз к значениям формата (для конкретного сценария)
+/// </summary>
+[HttpPost("scenarios/{scenarioId}/reset-phrases-scores")]
+public async Task ResetPhraseScores(int scenarioId)
+{
+    var phrases = await _db.PhraseOptions
+        .Include(p => p.Format)
+        .Where(p => p.ScenarioId == scenarioId)
+        .ToListAsync();
+
+    foreach (var phrase in phrases)
+    {
+        phrase.EmotionalScore = phrase.Format!.IdealEmotional / 3;
+        phrase.SafetyScore = phrase.Format.IdealSafety / 3;
+        phrase.StructuralScore = phrase.Format.IdealStructural / 3;
+    }
+
+    await _db.SaveChangesAsync();
+}
+
+/// <summary>
+/// Создать новый формат
+/// </summary>
+[HttpPost("formats")]
+public async Task<FormatFullDto> CreateFormat([FromBody] CreateFormatRequest req)
+{
+    // Проверяем уникальность кода
+    if (await _db.Formats.AnyAsync(f => f.Code == req.Code))
+        throw new Exception($"Формат с кодом '{req.Code}' уже существует");
+
+    var maxOrder = await _db.Formats.MaxAsync(f => (int?)f.SortOrder) ?? 0;
+
+    var format = new Format
+    {
+        Code = req.Code,
+        Name = req.Name,
+        Description = req.Description,
+        Color = req.Color,
+        IdealEmotional = req.IdealEmotional,
+        IdealSafety = req.IdealSafety,
+        IdealStructural = req.IdealStructural,
+        ToleranceEmotional = req.ToleranceEmotional,
+        ToleranceSafety = req.ToleranceSafety,
+        ToleranceStructural = req.ToleranceStructural,
+        WeightEmotional = req.WeightEmotional,
+        WeightSafety = req.WeightSafety,
+        WeightStructural = req.WeightStructural,
+        SortOrder = maxOrder + 1
+    };
+
+    _db.Formats.Add(format);
+    await _db.SaveChangesAsync();
+
+    return new FormatFullDto(
+        format.Id, format.Code, format.Name, format.Description ?? "",
+        format.Color ?? "#999",
+        format.IdealEmotional, format.IdealSafety, format.IdealStructural,
+        format.ToleranceEmotional, format.ToleranceSafety, format.ToleranceStructural,
+        format.WeightEmotional, format.WeightSafety, format.WeightStructural,
+        format.SortOrder
+    );
+}
+
+/// <summary>
+/// Удалить формат
+/// </summary>
+[HttpDelete("formats/{id}")]
+public async Task DeleteFormat(int id)
+{
+    var format = await _db.Formats
+        .Include(f => f.PhraseOptions)
+        .Include(f => f.Scenarios)
+        .FirstOrDefaultAsync(f => f.Id == id)
+        ?? throw new Exception("Формат не найден");
+
+    if (format.Scenarios.Any())
+        throw new Exception("Нельзя удалить формат, который используется в сценариях как формат адресата");
+
+    // Удаляем связанные фразы
+    _db.PhraseOptions.RemoveRange(format.PhraseOptions);
+    _db.Formats.Remove(format);
+    await _db.SaveChangesAsync();
+}
 }
 
 // ==================== DTO ДЛЯ АДМИНКИ ====================
@@ -250,4 +456,34 @@ public record CreatePhraseRequest(
     decimal EmotionalScore,
     decimal SafetyScore,
     decimal StructuralScore
+);
+
+public record UserAdminDto(
+    Guid Id, string Email, string Name, string Role,
+    DateTime CreatedAt, int TotalSessions, int CompletedSessions
+);
+
+public record UpdateRoleRequest(string Role);
+
+public record FormatFullDto(
+    int Id, string Code, string Name, string Description, string Color,
+    decimal IdealEmotional, decimal IdealSafety, decimal IdealStructural,
+    decimal ToleranceEmotional, decimal ToleranceSafety, decimal ToleranceStructural,
+    decimal WeightEmotional, decimal WeightSafety, decimal WeightStructural,
+    int SortOrder
+);
+
+public record UpdateFormatRequest(
+    string Name, string Description, string Color,
+    decimal IdealEmotional, decimal IdealSafety, decimal IdealStructural,
+    decimal ToleranceEmotional, decimal ToleranceSafety, decimal ToleranceStructural,
+    decimal WeightEmotional, decimal WeightSafety, decimal WeightStructural,
+    int SortOrder
+);
+
+public record CreateFormatRequest(
+    string Code, string Name, string Description, string Color,
+    decimal IdealEmotional, decimal IdealSafety, decimal IdealStructural,
+    decimal ToleranceEmotional, decimal ToleranceSafety, decimal ToleranceStructural,
+    decimal WeightEmotional, decimal WeightSafety, decimal WeightStructural
 );

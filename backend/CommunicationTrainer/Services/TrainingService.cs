@@ -16,7 +16,7 @@ public class TrainingService
         _engine = engine;
     }
 
-    public async Task<StartResponse> StartTraining(int? scenarioId = null)
+    public async Task<StartResponse> StartTraining(int? scenarioId, Guid? userId)
     {
         var scenario = scenarioId.HasValue
             ? await _db.Scenarios.Include(s => s.RecipientFormat).FirstOrDefaultAsync(s => s.Id == scenarioId && s.IsActive)
@@ -24,7 +24,13 @@ public class TrainingService
 
         if (scenario == null) throw new Exception("Нет доступных сценариев");
 
-        var session = new TrainingSession { Id = Guid.NewGuid(), CurrentScenarioId = scenario.Id };
+        var session = new TrainingSession 
+        { 
+            Id = Guid.NewGuid(), 
+            CurrentScenarioId = scenario.Id,
+            UserId = userId 
+        };
+        
         _db.TrainingSessions.Add(session);
         await _db.SaveChangesAsync();
 

@@ -306,11 +306,52 @@ namespace CommunicationTrainer.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
 
+                    b.Property<Guid?>("UserId")
+                        .HasColumnType("uuid");
+
                     b.HasKey("Id");
 
                     b.HasIndex("CurrentScenarioId");
 
+                    b.HasIndex("UserId");
+
                     b.ToTable("TrainingSessions");
+                });
+
+            modelBuilder.Entity("CommunicationTrainer.Api.Models.User", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("PasswordHash")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Email")
+                        .IsUnique();
+
+                    b.ToTable("Users");
                 });
 
             modelBuilder.Entity("CommunicationTrainer.Api.Models.MessageResult", b =>
@@ -420,7 +461,14 @@ namespace CommunicationTrainer.Migrations
                         .HasForeignKey("CurrentScenarioId")
                         .OnDelete(DeleteBehavior.SetNull);
 
+                    b.HasOne("CommunicationTrainer.Api.Models.User", "User")
+                        .WithMany("TrainingSessions")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.Navigation("CurrentScenario");
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("CommunicationTrainer.Api.Models.Format", b =>
@@ -460,6 +508,11 @@ namespace CommunicationTrainer.Migrations
                     b.Navigation("MessageResults");
 
                     b.Navigation("SelectedPhrases");
+                });
+
+            modelBuilder.Entity("CommunicationTrainer.Api.Models.User", b =>
+                {
+                    b.Navigation("TrainingSessions");
                 });
 #pragma warning restore 612, 618
         }

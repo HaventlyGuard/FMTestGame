@@ -8,6 +8,7 @@ public class AppDbContext : DbContext
     public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
 
     public DbSet<Format> Formats => Set<Format>();
+    public DbSet<User> Users => Set<User>();
     public DbSet<MessagePart> MessageParts => Set<MessagePart>();
     public DbSet<Scenario> Scenarios => Set<Scenario>();
     public DbSet<PhraseOption> PhraseOptions => Set<PhraseOption>();
@@ -64,6 +65,7 @@ public class AppDbContext : DbContext
              .OnDelete(DeleteBehavior.Restrict);
         });
 
+        
         // TrainingSession
         builder.Entity<TrainingSession>(e =>
         {
@@ -126,5 +128,19 @@ public class AppDbContext : DbContext
             new MessagePart { Id = 2, Code = "middle", Name = "Основная часть", OrderNumber = 2 },
             new MessagePart { Id = 3, Code = "closing", Name = "Завершение", OrderNumber = 3 }
         );
+        
+        // Юзер
+        builder.Entity<User>(e =>
+        {
+            e.HasIndex(u => u.Email).IsUnique();
+        });
+
+        builder.Entity<TrainingSession>(e =>
+        {
+            e.HasOne(s => s.User)
+                .WithMany(u => u.TrainingSessions)
+                .HasForeignKey(s => s.UserId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
     }
 }

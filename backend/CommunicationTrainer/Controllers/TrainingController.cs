@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using System.Security.Claims;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using CommunicationTrainer.Api.Data;
 using CommunicationTrainer.Api.DTOs;
@@ -25,8 +26,12 @@ public class TrainingController : ControllerBase
     /// Начать новую тренировку
     /// </summary>
     [HttpPost("start")]
-    public async Task<StartResponse> Start([FromBody] int? scenarioId) =>
-        await _service.StartTraining(scenarioId);
+    public async Task<StartResponse> Start([FromBody] int? scenarioId)
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        var uid = userId != null ? Guid.Parse(userId) : (Guid?)null;
+        return await _service.StartTraining(scenarioId, uid);
+    }
 
     /// <summary>
     /// Выбрать вариант фразы
