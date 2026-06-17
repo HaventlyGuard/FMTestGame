@@ -67,6 +67,74 @@ public class AdminController : ControllerBase
             ))
             .ToListAsync();
     }
+    
+    /// <summary>
+/// Получить все сессии
+/// </summary>
+[HttpGet("sessions")]
+public async Task<List<AdminSessionDto>> GetSessions()
+{
+    return await _db.TrainingSessions
+        .Include(s => s.User)
+        .Include(s => s.MessageResults)
+        .OrderByDescending(s => s.StartedAt)
+        .Select(s => new AdminSessionDto(
+            s.Id,
+            s.User != null ? s.User.Email : "Аноним",
+            s.User != null ? s.User.Name : "Гость",
+            s.Status,
+            s.TotalScenarios,
+            s.CompletedScenarios,
+            s.MessageResults.Count > 0
+                ? Math.Round(s.MessageResults.Average(r => (double)r.EffectivenessPercent), 1)
+                : 0,
+            s.StartedAt,
+            s.CompletedAt
+        ))
+        .ToListAsync();
+}
+
+/// <summary>
+/// Детали сессии
+/// </summary>
+[HttpGet("sessions/{sessionId}")]
+public async Task<AdminSessionDetailDto> GetSessionDetail(Guid sessionId)
+{
+    var session = await _db.TrainingSessions
+        .Include(s => s.User)
+        .Include(s => s.SelectedPhrases).ThenInclude(sp => sp.Part)
+        .Include(s => s.SelectedPhrases).ThenInclude(sp => sp.SelectedOption).ThenInclude(o => o!.Format)
+        .Include(s => s.MessageResults).ThenInclude(r => r.Format)
+        .Include(s => s.MessageResults).ThenInclude(r => r.Scenario)
+        .FirstAsync(s => s.Id == sessionId);
+
+    var scenarioResults = session.MessageResults
+        .GroupBy(r => new { r.ScenarioId, r.Scenario!.Title, r.Scenario!.RecipientFormatId })
+        .Select(g => new AdminScenarioResultDto(
+            g.Key.ScenarioId,
+            g.Key.Title,
+            g.First().Scenario!.RecipientName,
+            g.First().Scenario!.RecipientFormat?.Name ?? "",
+            g.OrderByDescending(r => r.EffectivenessPercent)
+             .Select(r => new EffectivenessResult(
+                 r.Format!.Code, r.Format.Name, r.Format.Color ?? "#999",
+                 (double)r.EffectivenessPercent,
+                 r.FormatId == g.Key.RecipientFormatId
+             )).ToList()
+        )).ToList();
+
+    return new AdminSessionDetailDto(
+        session.Id,
+        session.User?.Email ?? "Аноним",
+        session.User?.Name ?? "Гость",
+        session.Status,
+        session.TotalScenarios,
+        session.CompletedScenarios,
+        session.StartedAt,
+        session.CompletedAt,
+        scenarioResults
+    );
+}
 
     /// <summary>
     /// Изменить роль пользователя
@@ -493,4 +561,22 @@ public record CreateFormatRequest(
     decimal IdealEmotional, decimal IdealSafety, decimal IdealStructural,
     decimal ToleranceEmotional, decimal ToleranceSafety, decimal ToleranceStructural,
     decimal WeightEmotional, decimal WeightSafety, decimal WeightStructural
+);
+
+public record AdminSessionDto(
+    Guid Id, string UserEmail, string UserName, string Status,
+    int TotalScenarios, int CompletedScenarios, double AvgPercent,
+    DateTime StartedAt, DateTime? CompletedAt
+);
+
+public record AdminSessionDetailDto(
+    Guid Id, string UserEmail, string UserName, string Status,
+    int TotalScenarios, int CompletedScenarios,
+    DateTime StartedAt, DateTime? CompletedAt,
+    List<AdminScenarioResultDto> ScenarioResults
+);
+
+public record AdminScenarioResultDto(
+    int ScenarioId, string Title, string RecipientName, string RecipientFormatName,
+    List<EffectivenessResult> Results
 );

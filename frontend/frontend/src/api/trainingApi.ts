@@ -4,8 +4,7 @@ import type { StartResponse, SelectResponse, EvaluateResponse, FinalResultsRespo
 const base = 'http://localhost:5081/api/training';
 
 export const trainingApi = {
-  start: (scenarioId?: number) =>
-    client.post<StartResponse>(`${base}/start`, scenarioId ?? null).then(r => r.data),
+  start: () => client.post<StartResponse>(`${base}/start`).then(r => r.data),
   select: (sessionId: string, optionId: number) =>
     client.post<SelectResponse>(`${base}/select`, { sessionId, optionId }).then(r => r.data),
   evaluate: (sessionId: string) =>

@@ -65,106 +65,134 @@ public class TrainingService
     }
 
     public async Task<SelectResponse> SelectPhrase(Guid sessionId, int optionId)
+{
+    var option = await _db.PhraseOptions.Include(o => o.Part).Include(o => o.Format)
+        .FirstAsync(o => o.Id == optionId);
+
+    var session = await _db.TrainingSessions.FindAsync(sessionId)
+        ?? throw new Exception("Сессия не найдена");
+
+    var scenarioId = session.CurrentScenarioId!.Value;
+    var scenario = await _db.Scenarios.Include(s => s.RecipientFormat).FirstAsync(s => s.Id == scenarioId);
+
+    var existing = await _db.SelectedPhrases
+        .FirstOrDefaultAsync(s => s.SessionId == sessionId && s.ScenarioId == scenarioId && s.PartId == option.PartId);
+    if (existing != null) _db.SelectedPhrases.Remove(existing);
+
+    _db.SelectedPhrases.Add(new SelectedPhrase
     {
-        var option = await _db.PhraseOptions.Include(o => o.Part).Include(o => o.Format)
-            .FirstAsync(o => o.Id == optionId);
+        SessionId = sessionId, ScenarioId = scenarioId,
+        PartId = option.PartId, SelectedOptionId = optionId
+    });
+    await _db.SaveChangesAsync();
 
-        var session = await _db.TrainingSessions.FindAsync(sessionId)
-            ?? throw new Exception("Сессия не найдена");
+    var selected = await GetSelectedPhrases(sessionId, scenarioId);
+    var parts = new[] { "opening", "middle", "closing" };
+    var currentIndex = Array.IndexOf(parts, option.Part!.Code);
 
-        var scenarioId = session.CurrentScenarioId!.Value;
+    if (currentIndex >= parts.Length - 1)
+    {
+        // Оцениваем сценарий
+        var evalResponse = await EvaluateScenario(sessionId, scenarioId);
+        
+        var queue = JsonSerializer.Deserialize<List<int>>(session.ScenarioQueue!)!;
+        var currentPos = queue.IndexOf(scenarioId);
+        session.CompletedScenarios = currentPos + 1;
 
-        var existing = await _db.SelectedPhrases
-            .FirstOrDefaultAsync(s => s.SessionId == sessionId && s.ScenarioId == scenarioId && s.PartId == option.PartId);
-        if (existing != null) _db.SelectedPhrases.Remove(existing);
-
-        _db.SelectedPhrases.Add(new SelectedPhrase
+        if (currentPos < queue.Count - 1)
         {
-            SessionId = sessionId, ScenarioId = scenarioId,
-            PartId = option.PartId, SelectedOptionId = optionId
-        });
-        await _db.SaveChangesAsync();
+            var nextId = queue[currentPos + 1];
+            session.CurrentScenarioId = nextId;
+            await _db.SaveChangesAsync();
 
-        var selected = await GetSelectedPhrases(sessionId, scenarioId);
-        var parts = new[] { "opening", "middle", "closing" };
-        var currentIndex = Array.IndexOf(parts, option.Part!.Code);
+            var nextScenario = await _db.Scenarios.Include(s => s.RecipientFormat).FirstAsync(s => s.Id == nextId);
+            var nextOpts = await GetOptions(nextId, "opening");
 
-        if (currentIndex >= parts.Length - 1)
-        {
-            await EvaluateScenario(sessionId, scenarioId);
-            var queue = JsonSerializer.Deserialize<List<int>>(session.ScenarioQueue!)!;
-            var currentPos = queue.IndexOf(scenarioId);
-            session.CompletedScenarios = currentPos + 1;
-
-            if (currentPos < queue.Count - 1)
-            {
-                var nextId = queue[currentPos + 1];
-                session.CurrentScenarioId = nextId;
-                await _db.SaveChangesAsync();
-
-                var nextScenario = await _db.Scenarios.Include(s => s.RecipientFormat).FirstAsync(s => s.Id == nextId);
-                var nextOpts = await GetOptions(nextId, "opening");
-
-                return new SelectResponse("next_scenario",
-                    new PartDto("opening", "Вступление", 1, 3), nextOpts, selected,
-                    session.CompletedScenarios, session.TotalScenarios, MapScenario(nextScenario));
-            }
-            else
-            {
-                session.Status = "completed";
-                session.CompletedAt = DateTime.UtcNow;
-                await _db.SaveChangesAsync();
-                return new SelectResponse("finished", null, null, selected,
-                    session.CompletedScenarios, session.TotalScenarios, null);
-            }
+            return new SelectResponse("next_scenario",
+                new PartDto("opening", "Вступление", 1, 3), nextOpts, selected,
+                session.CompletedScenarios, session.TotalScenarios, MapScenario(nextScenario),
+                evalResponse.Results); // ← результаты сценария
         }
-
-        var nextPartCode = parts[currentIndex + 1];
-        var nextPart = await _db.MessageParts.FirstAsync(p => p.Code == nextPartCode);
-        var nextOpts2 = await GetOptions(scenarioId, nextPartCode);
-
-        return new SelectResponse("next_part",
-            new PartDto(nextPart.Code, nextPart.Name, currentIndex + 2, 3), nextOpts2, selected,
-            session.CompletedScenarios, session.TotalScenarios, null);
+        else
+        {
+            session.Status = "completed";
+            session.CompletedAt = DateTime.UtcNow;
+            await _db.SaveChangesAsync();
+            return new SelectResponse("finished", null, null, selected,
+                session.CompletedScenarios, session.TotalScenarios, null,
+                evalResponse.Results); // ← результаты сценария
+        }
     }
+
+    var nextPartCode = parts[currentIndex + 1];
+    var nextPart = await _db.MessageParts.FirstAsync(p => p.Code == nextPartCode);
+    var nextOpts2 = await GetOptions(scenarioId, nextPartCode);
+
+    return new SelectResponse("next_part",
+        new PartDto(nextPart.Code, nextPart.Name, currentIndex + 2, 3), nextOpts2, selected,
+        session.CompletedScenarios, session.TotalScenarios, null, null);
+}
 
     public async Task<FinalResultsResponse> GetFinalResults(Guid sessionId)
-    {
-        var session = await _db.TrainingSessions
-            .Include(s => s.MessageResults).ThenInclude(r => r.Format)
-            .Include(s => s.MessageResults).ThenInclude(r => r.Scenario)
-            .FirstAsync(s => s.Id == sessionId);
+{
+    var session = await _db.TrainingSessions
+        .Include(s => s.MessageResults).ThenInclude(r => r.Format)
+        .Include(s => s.MessageResults).ThenInclude(r => r.Scenario)
+        .FirstAsync(s => s.Id == sessionId);
 
-        // Средние по всем форматам за всю сессию
-        var formatAverages = await _db.MessageResults
-            .Where(r => r.SessionId == sessionId)
-            .GroupBy(r => new { r.FormatId, r.Format!.Code, r.Format!.Name, r.Format!.Color })
-            .Select(g => new EffectivenessResult(
-                g.Key.Code, g.Key.Name, g.Key.Color ?? "#999",
-                Math.Round(g.Average(r => (double)r.EffectivenessPercent), 1),
-                false
-            ))
-            .ToListAsync();
+    // Берём результаты ТОЛЬКО для родных форматов сценариев
+    var scenarioIds = await _db.MessageResults
+        .Where(r => r.SessionId == sessionId)
+        .Select(r => r.ScenarioId)
+        .Distinct()
+        .ToListAsync();
 
-        // Результаты по каждому сценарию
-        var scenarioResults = await _db.MessageResults
-            .Where(r => r.SessionId == sessionId)
-            .Include(r => r.Scenario)
-            .GroupBy(r => new { r.ScenarioId, r.Scenario!.Title })
-            .Select(g => new ScenarioResultDto(
-                g.Key.ScenarioId, g.Key.Title,
-                g.OrderByDescending(r => r.EffectivenessPercent)
-                 .Select(r => new EffectivenessResult(
-                     r.Format!.Code, r.Format.Name, r.Format.Color ?? "#999",
-                     (double)r.EffectivenessPercent, false
-                 )).ToList()
-            ))
-            .ToListAsync();
+    var nativeFormatIds = await _db.Scenarios
+        .Where(s => scenarioIds.Contains(s.Id))
+        .Select(s => s.RecipientFormatId)
+        .ToListAsync();
 
-        return new FinalResultsResponse(
-            formatAverages.OrderByDescending(r => r.Percent).ToList(),
-            scenarioResults, session.TotalScenarios, session.CompletedScenarios);
-    }
+    // Средний % попадания в нужные форматы
+    var targetResults = await _db.MessageResults
+        .Where(r => r.SessionId == sessionId && nativeFormatIds.Contains(r.FormatId))
+        .GroupBy(r => new { r.FormatId, r.Format!.Code, r.Format!.Name, r.Format!.Color })
+        .Select(g => new EffectivenessResult(
+            g.Key.Code, g.Key.Name, g.Key.Color ?? "#999",
+            Math.Round(g.Average(r => (double)r.EffectivenessPercent), 1),
+            true
+        ))
+        .ToListAsync();
+
+    // Общий средний %
+    var overallAverage = targetResults.Count > 0
+        ? Math.Round(targetResults.Average(r => r.Percent), 1)
+        : 0;
+
+    // Результаты по каждому сценарию
+    var scenarioResults = await _db.MessageResults
+        .Where(r => r.SessionId == sessionId)
+        .Include(r => r.Scenario)
+        .Include(r => r.Format)
+        .Where(r => nativeFormatIds.Contains(r.FormatId))
+        .GroupBy(r => new { r.ScenarioId, r.Scenario!.Title })
+        .Select(g => new ScenarioResultDto(
+            g.Key.ScenarioId, g.Key.Title,
+            g.Select(r => new EffectivenessResult(
+                r.Format!.Code, r.Format.Name, r.Format.Color ?? "#999",
+                (double)r.EffectivenessPercent,
+                r.FormatId == g.First().Scenario!.RecipientFormatId
+            )).ToList()
+        ))
+        .ToListAsync();
+
+    return new FinalResultsResponse(
+        targetResults.OrderByDescending(r => r.Percent).ToList(),
+        scenarioResults,
+        session.TotalScenarios,
+        session.CompletedScenarios,
+        overallAverage
+    );
+}
 
     public async Task<EvaluateResponse> Evaluate(Guid sessionId)
     {

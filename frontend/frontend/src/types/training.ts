@@ -21,7 +21,9 @@ export interface FinalResultsResponse {
   scenarioResults: { scenarioId: number; scenarioTitle: string; results: EffectivenessResult[] }[];
   totalScenarios: number;
   completedScenarios: number;
+  overallAverage: number;
 }
+
 export interface Scenario {
   id: number;
   title: string;

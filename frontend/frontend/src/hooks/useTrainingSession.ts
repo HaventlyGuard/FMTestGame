@@ -65,10 +65,10 @@ export function useTrainingSession() {
           setOptions(newOpts);
           setAllOptions((prev) => ({ ...prev, [data.nextPart!.code]: newOpts }));
         } else if (data.nextAction === 'next_scenario') {
-          const evalData = await trainingApi.evaluate(sessionId);
+          // Результаты уже в ответе
           setScenarioResult({
-            results: evalData.results,
-            bestMatch: evalData.bestMatch,
+            results: data.scenarioResults || [],
+            bestMatch: data.scenarioResults?.find(r => r.isNative) || data.scenarioResults?.[0] || null,
           });
           setPendingScenario(data.nextScenario);
           setPendingOptions(data.options!);
@@ -109,39 +109,38 @@ export function useTrainingSession() {
 
   const replayScenario = useCallback(async () => {
     setLoading(true);
+    setScenarioResult(null);
+    setPendingScenario(null);
+    setPendingOptions([]);
     try {
-      const data = await trainingApi.start(scenario?.id);
+      const data = await trainingApi.start();
       setSessionId(data.sessionId);
       setScenario(data.scenario);
       setCurrentPart(data.currentPart);
       setOptions(data.options);
       setSelectedPhrases([]);
       setAllOptions({ [data.currentPart.code]: data.options });
-      setScenarioResult(null);
-      setPendingScenario(null);
-      setPendingOptions([]);
     } catch {
       setError('Ошибка');
     }
     setLoading(false);
-  }, [scenario]);
-
+  }, []);
 
   const finishEarly = useCallback(async () => {
-  if (!sessionId) return;
-  setLoading(true);
-  try {
-    const final = await trainingApi.getResults(sessionId);
-    setFinalResults(final);
-    setScenarioResult(null);
-    setPendingScenario(null);
-    setCurrentPart(null);
-    setOptions([]);
-  } catch {
-    setError('Ошибка');
-  }
-  setLoading(false);
-}, [sessionId]);
+    if (!sessionId) return;
+    setLoading(true);
+    try {
+      const final = await trainingApi.getResults(sessionId);
+      setFinalResults(final);
+      setScenarioResult(null);
+      setPendingScenario(null);
+      setCurrentPart(null);
+      setOptions([]);
+    } catch {
+      setError('Ошибка');
+    }
+    setLoading(false);
+  }, [sessionId]);
 
   const nextScenario = useCallback(() => {
     setScenario(pendingScenario);

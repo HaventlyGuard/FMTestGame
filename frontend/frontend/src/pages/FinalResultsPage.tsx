@@ -25,23 +25,34 @@ export function FinalResultsPage({ finalResults, onRestart }: Props) {
           Пройдено {finalResults.completedScenarios} из {finalResults.totalScenarios} сценариев
         </p>
 
-        {/* Диаграмма */}
-        <div className="bg-gray-800 rounded-2xl p-6 mb-8 border border-gray-700 flex justify-center">
-          <BarChart width={700} height={400} data={chartData}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#333" />
-            <XAxis dataKey="name" stroke="#999" />
-            <YAxis domain={[0, 100]} stroke="#999" tickFormatter={v => `${v}%`} />
-            <Tooltip
-              contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px' }}
-              formatter={(v: any) => [`${v}%`, 'Эффективность']}
-            />
-            <Bar dataKey="percent" radius={[4, 4, 0, 0]}>
-              {chartData.map((entry, i) => (
-                <Cell key={i} fill={entry.color} />
-              ))}
-            </Bar>
-          </BarChart>
+        {/* Общий результат */}
+        <div className="bg-gray-800 rounded-2xl p-8 border border-gray-700 text-center mb-8">
+          <p className="text-gray-400 mb-2">Ваш общий результат</p>
+          <p className="text-5xl font-bold text-orange-400">{finalResults.overallAverage}%</p>
+          <p className="text-gray-500 text-sm mt-2">
+            Средний % попадания в нужные форматы за {finalResults.completedScenarios} сценариев
+          </p>
         </div>
+
+        {/* Диаграмма */}
+        {chartData.length > 0 && (
+          <div className="bg-gray-800 rounded-2xl p-6 mb-8 border border-gray-700 flex justify-center">
+            <BarChart width={700} height={400} data={chartData}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#333" />
+              <XAxis dataKey="name" stroke="#999" />
+              <YAxis domain={[0, 100]} stroke="#999" tickFormatter={v => `${v}%`} />
+              <Tooltip
+                contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px' }}
+                formatter={(v: any) => [`${v}%`, 'Эффективность']}
+              />
+              <Bar dataKey="percent" radius={[4, 4, 0, 0]}>
+                {chartData.map((entry, i) => (
+                  <Cell key={i} fill={entry.color} />
+                ))}
+              </Bar>
+            </BarChart>
+          </div>
+        )}
 
         {/* Таблица */}
         <div className="bg-gray-800 rounded-2xl p-6 mb-8 border border-gray-700">

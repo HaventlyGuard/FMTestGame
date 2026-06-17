@@ -45,6 +45,7 @@ function UserApp() {
         hasMoreScenarios={!!t.pendingScenario}
         onReplay={() => t.replayScenario()}
         onNext={() => t.nextScenario()}
+        onFinish={() => t.finishEarly()}
       />
     );
   }
