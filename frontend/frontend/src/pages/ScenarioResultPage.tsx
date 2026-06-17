@@ -23,7 +23,7 @@ export function ScenarioResultPage({ scenario, results, selectedPhrases, hasMore
           <div className="glass p-8 text-center mb-6">
             <p className="text-slate-400 mb-2">Сообщение для <span className="font-medium text-slate-700">{scenario.recipientName}</span> ({scenario.recipientFormatName})</p>
             <p className="text-6xl font-extralight gradient-text">{nativeResult.percent}%</p>
-            <p className="text-slate-400 text-sm mt-2">{nativeResult.percent >= 80 ? '✅ Отлично!' : nativeResult.percent >= 50 ? '⚠️ Неплохо' : '❌ Мимо'}</p>
+            <p className="text-slate-400 text-sm mt-2">{nativeResult.percent >= 80 ? '✅ Отлично! Ваше сообщение смогло заинтересовать этого человека' : nativeResult.percent >= 50 ? '⚠️ Неплохо, человек вас услышал, но есть небольшое недовольство' : '❌ Человеку неприятно читать это сообщение, подумайте как бы вы могли префразировать, чтобы это изменить'}</p>
           </div>
         )}
 

@@ -1,44 +1,35 @@
 import { useState, useCallback, useEffect } from 'react';
 import { trainingApi } from '../api/trainingApi';
 import type {
-  Scenario,
-  Part,
-  PhraseOption,
-  SelectedPhraseInfo,
-  EffectivenessResult,
-  FinalResultsResponse,
+  Scenario, Part, PhraseOption, SelectedPhraseInfo,
+  EffectivenessResult, FinalResultsResponse,
 } from '../types/training';
 
 export function useTrainingSession() {
+  const [started, setStarted] = useState(false);
+  const [showIntro, setShowIntro] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [scenario, setScenario] = useState<Scenario | null>(null);
   const [currentPart, setCurrentPart] = useState<Part | null>(null);
   const [options, setOptions] = useState<PhraseOption[]>([]);
   const [selectedPhrases, setSelectedPhrases] = useState<SelectedPhraseInfo[]>([]);
   const [allOptions, setAllOptions] = useState<Record<string, PhraseOption[]>>({});
-
-  const [scenarioResult, setScenarioResult] = useState<{
-    results: EffectivenessResult[];
-    bestMatch: EffectivenessResult | null;
-  } | null>(null);
-
+  const [scenarioResult, setScenarioResult] = useState<{ results: EffectivenessResult[]; bestMatch: EffectivenessResult | null; } | null>(null);
   const [pendingScenario, setPendingScenario] = useState<Scenario | null>(null);
   const [pendingOptions, setPendingOptions] = useState<PhraseOption[]>([]);
-
   const [finalResults, setFinalResults] = useState<FinalResultsResponse | null>(null);
-
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-  return () => {
-    if (sessionId) {
-      trainingApi.getResults(sessionId).catch(() => {});
-    }
-  };
-}, [sessionId]);
+  // Нажали "Начать тренировку" на стартовой странице
+  const begin = useCallback(() => {
+    setStarted(true);
+    setShowIntro(true);
+  }, []);
 
+  // Нажали "Начать тренировку" в модалке (или "Пропустить")
   const start = useCallback(async () => {
+    setShowIntro(false);
     setLoading(true);
     setError(null);
     try {
@@ -59,61 +50,55 @@ export function useTrainingSession() {
     setLoading(false);
   }, []);
 
-  const select = useCallback(
-    async (optionId: number) => {
-      if (!sessionId) return;
-      setLoading(true);
-      try {
-        const data = await trainingApi.select(sessionId, optionId);
-        setSelectedPhrases(data.selectedPhrases);
-
-        if (data.nextAction === 'next_part') {
-          setCurrentPart(data.nextPart);
-          const newOpts = data.options!;
-          setOptions(newOpts);
-          setAllOptions((prev) => ({ ...prev, [data.nextPart!.code]: newOpts }));
-        } else if (data.nextAction === 'next_scenario') {
-          // Результаты уже в ответе
-          setScenarioResult({
-            results: data.scenarioResults || [],
-            bestMatch: data.scenarioResults?.find(r => r.isNative) || data.scenarioResults?.[0] || null,
-          });
-          setPendingScenario(data.nextScenario);
-          setPendingOptions(data.options!);
-          setCurrentPart(null);
-          setOptions([]);
-        } else if (data.nextAction === 'finished') {
-          const final = await trainingApi.getResults(sessionId);
-          setFinalResults(final);
-          setScenarioResult(null);
-          setPendingScenario(null);
-          setCurrentPart(null);
-          setOptions([]);
-        }
-      } catch {
-        setError('Ошибка при выборе');
+  useEffect(() => {
+    return () => {
+      if (sessionId) {
+        trainingApi.getResults(sessionId).catch(() => {});
       }
-      setLoading(false);
-    },
-    [sessionId]
-  );
+    };
+  }, [sessionId]);
 
-  const switchPart = useCallback(
-    (partCode: string) => {
-      const cached = allOptions[partCode];
-      if (cached) {
-        setOptions(cached);
-        const partNames: Record<string, string> = {
-          opening: 'Вступление',
-          middle: 'Основная часть',
-          closing: 'Завершение',
-        };
-        const stepNumber = ['opening', 'middle', 'closing'].indexOf(partCode) + 1;
-        setCurrentPart({ code: partCode, name: partNames[partCode], stepNumber, totalSteps: 3 });
+  const select = useCallback(async (optionId: number) => {
+    if (!sessionId) return;
+    setLoading(true);
+    try {
+      const data = await trainingApi.select(sessionId, optionId);
+      setSelectedPhrases(data.selectedPhrases);
+      if (data.nextAction === 'next_part') {
+        setCurrentPart(data.nextPart);
+        setOptions(data.options!);
+        setAllOptions(prev => ({ ...prev, [data.nextPart!.code]: data.options! }));
+      } else if (data.nextAction === 'next_scenario') {
+        setScenarioResult({
+          results: data.scenarioResults || [],
+          bestMatch: data.scenarioResults?.find(r => r.isNative) || data.scenarioResults?.[0] || null,
+        });
+        setPendingScenario(data.nextScenario);
+        setPendingOptions(data.options!);
+        setCurrentPart(null);
+        setOptions([]);
+      } else if (data.nextAction === 'finished') {
+        const final = await trainingApi.getResults(sessionId);
+        setFinalResults(final);
+        setScenarioResult(null);
+        setPendingScenario(null);
+        setCurrentPart(null);
+        setOptions([]);
       }
-    },
-    [allOptions]
-  );
+    } catch {
+      setError('Ошибка при выборе');
+    }
+    setLoading(false);
+  }, [sessionId]);
+
+  const switchPart = useCallback((partCode: string) => {
+    const cached = allOptions[partCode];
+    if (cached) {
+      setOptions(cached);
+      const partNames: Record<string, string> = { opening: 'Вступление', middle: 'Основная часть', closing: 'Завершение' };
+      setCurrentPart({ code: partCode, name: partNames[partCode], stepNumber: ['opening','middle','closing'].indexOf(partCode)+1, totalSteps: 3 });
+    }
+  }, [allOptions]);
 
   const replayScenario = useCallback(async () => {
     setLoading(true);
@@ -128,9 +113,7 @@ export function useTrainingSession() {
       setOptions(data.options);
       setSelectedPhrases([]);
       setAllOptions({ [data.currentPart.code]: data.options });
-    } catch {
-      setError('Ошибка');
-    }
+    } catch { setError('Ошибка'); }
     setLoading(false);
   }, []);
 
@@ -144,9 +127,7 @@ export function useTrainingSession() {
       setPendingScenario(null);
       setCurrentPart(null);
       setOptions([]);
-    } catch {
-      setError('Ошибка');
-    }
+    } catch { setError('Ошибка'); }
     setLoading(false);
   }, [sessionId]);
 
@@ -162,21 +143,9 @@ export function useTrainingSession() {
   }, [pendingScenario, pendingOptions]);
 
   return {
-    sessionId,
-    scenario,
-    currentPart,
-    options,
-    selectedPhrases,
-    scenarioResult,
-    finalResults,
-    pendingScenario,
-    loading,
-    error,
-    start,
-    select,
-    switchPart,
-    replayScenario,
-    nextScenario,
-    finishEarly,
+    started, showIntro, sessionId, scenario, currentPart, options,
+    selectedPhrases, scenarioResult, finalResults, pendingScenario,
+    loading, error, begin, start, select, switchPart, replayScenario,
+    nextScenario, finishEarly,
   };
 }

@@ -154,7 +154,9 @@ public class TrainingService
 
     // Средний % попадания в нужные форматы
     var targetResults = await _db.MessageResults
-        .Where(r => r.SessionId == sessionId && nativeFormatIds.Contains(r.FormatId))
+        .Where(r => r.SessionId == sessionId)
+        .Include(r => r.Scenario)
+        .Where(r => r.FormatId == r.Scenario!.RecipientFormatId) // ← только где формат был целевым
         .GroupBy(r => new { r.FormatId, r.Format!.Code, r.Format!.Name, r.Format!.Color })
         .Select(g => new EffectivenessResult(
             g.Key.Code, g.Key.Name, g.Key.Color ?? "#999",

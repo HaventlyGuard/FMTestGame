@@ -26,8 +26,12 @@ public class TrainingController : ControllerBase
     /// Начать новую тренировку
     /// </summary>
     [HttpPost("start")]
-    public async Task<StartResponse> Start() =>
-        await _service.StartTraining(null);
+    public async Task<StartResponse> Start()
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        var uid = userId != null ? Guid.Parse(userId) : (Guid?)null;
+        return await _service.StartTraining(null, uid);
+    }
 
     /// <summary>
     /// Выбрать вариант фразы

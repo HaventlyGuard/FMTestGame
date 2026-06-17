@@ -11,8 +11,10 @@ import { useTrainingSession } from './hooks/useTrainingSession';
 import { UsersPage } from './pages/admin/UsersPage';
 import { FormatsPage } from './pages/admin/FormatsPage';
 import { FinalResultsPage } from './pages/FinalResultsPage';
+import { AnimatedBackground } from './components/AnimatedBackground';
 import { SessionsPage } from './pages/admin/SessionsPage';
 import { ScenarioResultPage } from './pages/ScenarioResultPage';
+import { IntroModal } from './components/IntroModal';
 
 function UserApp() {
   const t = useTrainingSession();
@@ -30,40 +32,51 @@ function UserApp() {
     );
   }
 
+  // Шаг 1: Стартовая страница
+  if (!t.started) {
+    return <StartPage onStart={() => t.begin()} loading={t.loading} />;
+  }
+
+  // Шаг 2: Модальное окно
+  if (t.showIntro) {
+    return (
+      <div className="min-h-screen relative bg-white flex items-center justify-center">
+        <AnimatedBackground />
+        <IntroModal isOpen={t.showIntro} onStart={() => t.start()} />
+      </div>
+    );
+  }
+
+  // Финальные результаты
   if (t.finalResults) {
     return <FinalResultsPage finalResults={t.finalResults} onRestart={() => t.start()} />;
   }
 
+  // Результат сценария
   if (t.scenarioResult && t.scenario && t.selectedPhrases) {
     return (
       <ScenarioResultPage
-        scenario={t.scenario}
-        results={t.scenarioResult.results}
-        bestMatch={t.scenarioResult.bestMatch}
-        selectedPhrases={t.selectedPhrases}
+        scenario={t.scenario} results={t.scenarioResult.results}
+        bestMatch={t.scenarioResult.bestMatch} selectedPhrases={t.selectedPhrases}
         hasMoreScenarios={!!t.pendingScenario}
-        onReplay={() => t.replayScenario()}
-        onNext={() => t.nextScenario()}
+        onReplay={() => t.replayScenario()} onNext={() => t.nextScenario()}
         onFinish={() => t.finishEarly()}
       />
     );
   }
 
+  // Тренировка
   if (t.scenario && t.currentPart) {
     return (
       <TrainingPage
-        scenario={t.scenario}
-        currentPart={t.currentPart}
-        options={t.options}
-        selectedPhrases={t.selectedPhrases}
-        onSelect={t.select}
-        onSwitchPart={t.switchPart}
-        loading={t.loading}
+        scenario={t.scenario} currentPart={t.currentPart} options={t.options}
+        selectedPhrases={t.selectedPhrases} onSelect={t.select}
+        onSwitchPart={t.switchPart} loading={t.loading}
       />
     );
   }
 
-  return <StartPage onStart={() => t.start()} loading={t.loading} />;
+  return <StartPage onStart={() => t.begin()} loading={t.loading} />;
 }
 
 function Layout() {

@@ -3,6 +3,8 @@ import type { StartResponse, SelectResponse, EvaluateResponse } from '../types/t
 
 const api = axios.create({ baseURL: '/api/training' });
 
+
+
 export const trainingApi = {
   start: (scenarioId?: number) =>
     api.post<StartResponse>('/start', scenarioId ?? null).then(r => r.data),
