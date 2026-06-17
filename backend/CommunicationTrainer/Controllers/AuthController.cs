@@ -14,13 +14,31 @@ public class AuthController : ControllerBase
 
     public AuthController(AuthService authService) => _authService = authService;
 
-    [HttpPost("register")]
-    public async Task<AuthResponse> Register([FromBody] RegisterRequest request) =>
-        await _authService.Register(request);
-
     [HttpPost("login")]
-    public async Task<AuthResponse> Login([FromBody] LoginRequest request) =>
-        await _authService.Login(request);
+    public async Task<ActionResult<AuthResponse>> Login([FromBody] LoginRequest request)
+    {
+        try
+        {
+            return await _authService.Login(request);
+        }
+        catch (Exception ex)
+        {
+            return Unauthorized(new { message = ex.Message });
+        }
+    }
+
+    [HttpPost("register")]
+    public async Task<ActionResult<AuthResponse>> Register([FromBody] RegisterRequest request)
+    {
+        try
+        {
+            return await _authService.Register(request);
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
 
     [Authorize]
     [HttpGet("me")]

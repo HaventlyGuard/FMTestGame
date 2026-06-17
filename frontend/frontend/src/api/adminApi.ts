@@ -31,6 +31,37 @@ export interface FormatFull {
   sortOrder: number;
 }
 
+export interface AdminSession {
+  id: string;
+  userEmail: string;
+  userName: string;
+  status: string;
+  totalScenarios: number;
+  completedScenarios: number;
+  avgPercent: number;
+  startedAt: string;
+  completedAt: string | null;
+}
+export interface AdminScenarioResult {
+  scenarioId: number;
+  title: string;
+  recipientName: string;
+  recipientFormatName: string;
+  results: { formatCode: string; formatName: string; color: string; percent: number; isNative: boolean }[];
+}
+
+export interface AdminSessionDetail {
+  id: string;
+  userEmail: string;
+  userName: string;
+  status: string;
+  totalScenarios: number;
+  completedScenarios: number;
+  startedAt: string;
+  completedAt: string | null;
+  scenarioResults: AdminScenarioResult[];
+}
+
 export const adminApi = {
   getFormats: () => client.get<Format[]>(`${base}/formats`).then(r => r.data),
   getScenarios: () => client.get<ScenarioListItem[]>(`${base}/scenarios`).then(r => r.data),
@@ -51,5 +82,7 @@ export const adminApi = {
   updateFormat: (id: number, data: any) => client.put<FormatFull>(`${base}/formats/${id}`, data).then(r => r.data),
   deleteFormat: (id: number) => client.delete(`${base}/formats/${id}`),
   resetPhraseScores: (scenarioId: number) => client.post(`${base}/scenarios/${scenarioId}/reset-phrases-scores`),
+  getSessions: () => client.get<AdminSession[]>(`${base}/sessions`).then(r => r.data),
+  getSessionDetail: (id: string) => client.get<AdminSessionDetail>(`${base}/sessions/${id}`).then(r => r.data),
   
 };

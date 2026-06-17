@@ -11,6 +11,7 @@ import { useTrainingSession } from './hooks/useTrainingSession';
 import { UsersPage } from './pages/admin/UsersPage';
 import { FormatsPage } from './pages/admin/FormatsPage';
 import { FinalResultsPage } from './pages/FinalResultsPage';
+import { SessionsPage } from './pages/admin/SessionsPage';
 import { ScenarioResultPage } from './pages/ScenarioResultPage';
 
 function UserApp() {
@@ -98,6 +99,7 @@ function Layout() {
         {user?.role === 'admin' && (
           <Route path="/admin" element={<AdminLayout />}>
             <Route index element={<ScenariosList />} />
+            <Route path="sessions" element={<SessionsPage />} />
             <Route path="scenarios" element={<ScenariosList />} />
             <Route path="scenarios/:id" element={<ScenarioEditor />} />
             <Route path="formats" element={<FormatsPage />} />

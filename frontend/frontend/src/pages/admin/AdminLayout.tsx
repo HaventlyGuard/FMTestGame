@@ -7,6 +7,7 @@ export function AdminLayout() {
     { path: '/admin/scenarios', label: 'Сценарии' },
     { path: '/admin/users', label: 'Пользователи' },
      { path: '/admin/formats', label: 'Форматы' }, 
+     { path: '/admin/sessions', label: 'Сессии' },
     { path: '/admin/stats', label: 'Статистика' },
   ];
 
