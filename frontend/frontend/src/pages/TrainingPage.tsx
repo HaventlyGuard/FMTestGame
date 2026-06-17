@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { Scenario, Part, PhraseOption, SelectedPhraseInfo } from '../types/training';
 
 interface Props {
@@ -6,31 +7,58 @@ interface Props {
   options: PhraseOption[];
   selectedPhrases: SelectedPhraseInfo[];
   onSelect: (id: number) => void;
+  onSwitchPart: (partCode: string) => void;
   loading: boolean;
 }
 
-export function TrainingPage({ scenario, currentPart, options, selectedPhrases, onSelect, loading }: Props) {
-  const steps = [
-    { code: 'opening', name: 'Вступление' },
-    { code: 'middle', name: 'Основная часть' },
-    { code: 'closing', name: 'Завершение' },
-  ];
+const STEPS = [
+  { code: 'opening', name: 'Вступление' },
+  { code: 'middle', name: 'Основная часть' },
+  { code: 'closing', name: 'Завершение' },
+];
+
+export function TrainingPage({ scenario, currentPart, options, selectedPhrases, onSelect, onSwitchPart, loading }: Props) {
+  const [activePart, setActivePart] = useState(currentPart.code);
+
+  const handleStepClick = (partCode: string) => {
+    setActivePart(partCode);
+    onSwitchPart(partCode);
+  };
+
+  const handleSelect = (optionId: number) => {
+    onSelect(optionId);
+  };
 
   return (
     <div className="min-h-screen bg-gray-900 text-white">
       <div className="bg-gray-800 border-b border-gray-700 px-6 py-4">
         <div className="max-w-7xl mx-auto flex items-center gap-4">
-          {steps.map((step, i) => {
+          {STEPS.map((step, i) => {
             const done = selectedPhrases.some(p => p.partCode === step.code);
-            const active = currentPart.code === step.code;
+            const active = activePart === step.code;
+
             return (
               <div key={step.code} className="flex items-center gap-2 flex-1">
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
-                  done ? 'bg-green-500' : active ? 'bg-orange-500' : 'bg-gray-600'
-                }`}>
+                <button
+                  onClick={() => handleStepClick(step.code)}
+                  className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition ${
+                    done ? 'bg-green-500 hover:bg-green-400' 
+                    : active ? 'bg-orange-500' 
+                    : 'bg-gray-600 hover:bg-gray-500'
+                  }`}
+                >
                   {done ? '✓' : i + 1}
-                </div>
-                <span className={active ? 'text-white font-semibold' : 'text-gray-400'}>{step.name}</span>
+                </button>
+                <button
+                  onClick={() => handleStepClick(step.code)}
+                  className={`transition ${
+                    active ? 'text-white font-semibold' 
+                    : done ? 'text-green-400 hover:text-white' 
+                    : 'text-gray-400 hover:text-white'
+                  }`}
+                >
+                  {step.name}
+                </button>
                 {i < 2 && <div className="flex-1 h-px bg-gray-600 mx-2" />}
               </div>
             );
@@ -43,8 +71,12 @@ export function TrainingPage({ scenario, currentPart, options, selectedPhrases, 
           <div className="bg-gray-800 rounded-2xl p-6 border border-gray-700">
             <div className="flex items-center gap-3 mb-4">
               <span className="text-sm text-gray-400">Адресат:</span>
-              <span className="px-3 py-1 bg-gray-700 rounded-full text-sm font-semibold">{scenario.recipientName}</span>
-              <span className="px-3 py-1 rounded-full text-sm font-semibold bg-white/10">{scenario.recipientFormatName}</span>
+              <span className="px-3 py-1 bg-gray-700 rounded-full text-sm font-semibold">
+                {scenario.recipientName}
+              </span>
+              <span className="px-3 py-1 rounded-full text-sm font-semibold bg-white/10">
+                {scenario.recipientFormatName}
+              </span>
             </div>
             <h2 className="text-2xl font-bold mb-3">{scenario.title}</h2>
             <p className="text-gray-300">{scenario.situationText}</p>
@@ -58,25 +90,40 @@ export function TrainingPage({ scenario, currentPart, options, selectedPhrases, 
 
           <div>
             <h3 className="text-lg font-semibold mb-4">
-              Выберите вариант для: <span className="text-orange-400">{currentPart.name}</span>
+              Выберите вариант для:{' '}
+              <span className="text-orange-400">
+                {STEPS.find(s => s.code === activePart)?.name}
+              </span>
             </h3>
             <div className="grid gap-3">
-              {options.map(o => (
-                <button
-                  key={o.id}
-                  onClick={() => onSelect(o.id)}
-                  disabled={loading}
-                  className="text-left bg-gray-800 hover:bg-gray-750 border border-gray-700 hover:border-orange-500 rounded-xl p-4 transition disabled:opacity-50 w-full"
-                >
-                  <div className="flex items-start gap-3">
-                    <span className="w-3 h-3 rounded-full mt-1.5 flex-shrink-0" style={{ backgroundColor: o.formatColor }} />
-                    <div>
-                      <span className="text-xs text-gray-500">{o.formatName}</span>
-                      <p className="text-white mt-1">{o.text}</p>
+              {options.map(o => {
+                const isSelected = selectedPhrases.find(
+                  p => p.partCode === activePart && p.text === o.text
+                );
+                return (
+                  <button
+                    key={o.id}
+                    onClick={() => handleSelect(o.id)}
+                    disabled={loading}
+                    className={`text-left border rounded-xl p-4 transition disabled:opacity-50 w-full ${
+                      isSelected
+                        ? 'bg-orange-500/10 border-orange-500'
+                        : 'bg-gray-800 hover:bg-gray-750 border-gray-700 hover:border-orange-500'
+                    }`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <span
+                        className="w-3 h-3 rounded-full mt-1.5 flex-shrink-0"
+                        style={{ backgroundColor: o.formatColor }}
+                      />
+                      <div>
+                        <span className="text-xs text-gray-500">{o.formatName}</span>
+                        <p className="text-white mt-1">{o.text}</p>
+                      </div>
                     </div>
-                  </div>
-                </button>
-              ))}
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>
@@ -84,22 +131,38 @@ export function TrainingPage({ scenario, currentPart, options, selectedPhrases, 
         <div>
           <h3 className="text-lg font-semibold mb-4">Ваше сообщение</h3>
           <div className="space-y-3">
-            {steps.map(step => {
+            {STEPS.map(step => {
               const phrase = selectedPhrases.find(p => p.partCode === step.code);
               return (
-                <div key={step.code} className={`rounded-xl p-4 border ${phrase ? 'border-green-500/50 bg-gray-800' : 'border-gray-700 bg-gray-800/50'}`}>
+                <button
+                  key={step.code}
+                  onClick={() => handleStepClick(step.code)}
+                  className={`w-full text-left rounded-xl p-4 border transition ${
+                    activePart === step.code
+                      ? 'border-orange-500 bg-gray-800'
+                      : phrase
+                      ? 'border-green-500/50 bg-gray-800'
+                      : 'border-gray-700 bg-gray-800/50'
+                  }`}
+                >
                   <div className="text-xs text-gray-500 mb-1">{step.name}</div>
                   {phrase ? (
                     <>
                       <p className="text-sm text-white mb-2">{phrase.text}</p>
-                      <span className="text-xs px-2 py-0.5 rounded-full" style={{ backgroundColor: phrase.formatColor + '30', color: phrase.formatColor }}>
+                      <span
+                        className="text-xs px-2 py-0.5 rounded-full"
+                        style={{
+                          backgroundColor: phrase.formatColor + '30',
+                          color: phrase.formatColor,
+                        }}
+                      >
                         {phrase.formatCode}
                       </span>
                     </>
                   ) : (
-                    <p className="text-sm text-gray-600 italic">Ожидает выбора...</p>
+                    <p className="text-sm text-gray-600 italic">Нажмите, чтобы выбрать</p>
                   )}
-                </div>
+                </button>
               );
             })}
           </div>

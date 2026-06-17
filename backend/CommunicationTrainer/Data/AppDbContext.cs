@@ -88,7 +88,7 @@ public class AppDbContext : DbContext
             e.HasOne(s => s.Scenario)
              .WithMany(sc => sc.SelectedPhrases)
              .HasForeignKey(s => s.ScenarioId)
-             .OnDelete(DeleteBehavior.Restrict);
+             .OnDelete(DeleteBehavior.Cascade);
 
             e.HasOne(s => s.Part)
              .WithMany(m => m.SelectedPhrases)
@@ -114,7 +114,7 @@ public class AppDbContext : DbContext
             e.HasOne(m => m.Scenario)
              .WithMany(sc => sc.MessageResults)
              .HasForeignKey(m => m.ScenarioId)
-             .OnDelete(DeleteBehavior.Restrict);
+             .OnDelete(DeleteBehavior.Cascade);
 
             e.HasOne(m => m.Format)
              .WithMany(f => f.MessageResults)

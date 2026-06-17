@@ -21,5 +21,11 @@
 **/obj
 **/secrets.dev.yaml
 **/values.dev.yaml
+node_modules/
+bin/
+obj/
+.vs/
+.vscode/
+.git/
 LICENSE
 README.md

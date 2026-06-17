@@ -3,6 +3,7 @@ using System;
 using CommunicationTrainer.Api.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace CommunicationTrainer.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260616121309_AddUsers")]
+    partial class AddUsers
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -295,14 +298,8 @@ namespace CommunicationTrainer.Migrations
                     b.Property<DateTime?>("CompletedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<int>("CompletedScenarios")
-                        .HasColumnType("integer");
-
                     b.Property<int?>("CurrentScenarioId")
                         .HasColumnType("integer");
-
-                    b.Property<string>("ScenarioQueue")
-                        .HasColumnType("text");
 
                     b.Property<DateTime>("StartedAt")
                         .HasColumnType("timestamp with time zone");
@@ -311,9 +308,6 @@ namespace CommunicationTrainer.Migrations
                         .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
-
-                    b.Property<int>("TotalScenarios")
-                        .HasColumnType("integer");
 
                     b.Property<Guid?>("UserId")
                         .HasColumnType("uuid");
@@ -374,7 +368,7 @@ namespace CommunicationTrainer.Migrations
                     b.HasOne("CommunicationTrainer.Api.Models.Scenario", "Scenario")
                         .WithMany("MessageResults")
                         .HasForeignKey("ScenarioId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.HasOne("CommunicationTrainer.Api.Models.TrainingSession", "Session")
@@ -439,7 +433,7 @@ namespace CommunicationTrainer.Migrations
                     b.HasOne("CommunicationTrainer.Api.Models.Scenario", "Scenario")
                         .WithMany("SelectedPhrases")
                         .HasForeignKey("ScenarioId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.HasOne("CommunicationTrainer.Api.Models.PhraseOption", "SelectedOption")

@@ -2,6 +2,7 @@
 using CommunicationTrainer.Api.Data;
 using CommunicationTrainer.Api.DTOs;
 using CommunicationTrainer.Api.Models;
+using System.Text.Json;
 
 namespace CommunicationTrainer.Api.Services;
 
@@ -16,54 +17,67 @@ public class TrainingService
         _engine = engine;
     }
 
-    public async Task<StartResponse> StartTraining(int? scenarioId, Guid? userId)
+    private const int SCENARIOS_PER_SESSION = 3;
+
+    public async Task<StartResponse> StartTraining(int? scenarioId = null, Guid? userId = null)
     {
-        var scenario = scenarioId.HasValue
-            ? await _db.Scenarios.Include(s => s.RecipientFormat).FirstOrDefaultAsync(s => s.Id == scenarioId && s.IsActive)
-            : await _db.Scenarios.Include(s => s.RecipientFormat).Where(s => s.IsActive).OrderBy(s => Guid.NewGuid()).FirstOrDefaultAsync();
+        List<int> queue;
+        int total;
 
-        if (scenario == null) throw new Exception("Нет доступных сценариев");
+        if (scenarioId.HasValue)
+        {
+            queue = new List<int> { scenarioId.Value };
+            total = 1;
+        }
+        else
+        {
+            var allIds = await _db.Scenarios
+                .Where(s => s.IsActive)
+                .Select(s => s.Id)
+                .ToListAsync();
 
-        var session = new TrainingSession 
-        { 
-            Id = Guid.NewGuid(), 
-            CurrentScenarioId = scenario.Id,
-            UserId = userId 
+            if (allIds.Count == 0) throw new Exception("Нет доступных сценариев");
+
+            var random = new Random();
+            queue = allIds.OrderBy(_ => random.Next()).Take(SCENARIOS_PER_SESSION).ToList();
+            total = queue.Count;
+        }
+
+        var firstId = queue[0];
+        var scenario = await _db.Scenarios.Include(s => s.RecipientFormat).FirstAsync(s => s.Id == firstId);
+
+        var session = new TrainingSession
+        {
+            Id = Guid.NewGuid(),
+            CurrentScenarioId = firstId,
+            UserId = userId,
+            ScenarioQueue = JsonSerializer.Serialize(queue),
+            TotalScenarios = total,
+            CompletedScenarios = 0
         };
-        
         _db.TrainingSessions.Add(session);
         await _db.SaveChangesAsync();
 
-        var options = await GetOptions(scenario.Id, "opening");
+        var options = await GetOptions(firstId, "opening");
 
-        return new StartResponse(
-            session.Id,
-            new ScenarioDto(scenario.Id, scenario.Title, scenario.SituationText,
-                scenario.RecipientName, scenario.RecipientFormat?.Code ?? "", scenario.RecipientFormat?.Name ?? "",
-                scenario.HintText ?? ""),
-            new PartDto("opening", "Вступление", 1, 3),
-            options
-        );
+        return new StartResponse(session.Id, MapScenario(scenario),
+            new PartDto("opening", "Вступление", 1, 3), options, 0, total);
     }
 
     public async Task<SelectResponse> SelectPhrase(Guid sessionId, int optionId)
     {
-        var option = await _db.PhraseOptions
-            .Include(o => o.Part).Include(o => o.Format)
-            .FirstOrDefaultAsync(o => o.Id == optionId)
-            ?? throw new Exception("Вариант не найден");
+        var option = await _db.PhraseOptions.Include(o => o.Part).Include(o => o.Format)
+            .FirstAsync(o => o.Id == optionId);
 
         var session = await _db.TrainingSessions.FindAsync(sessionId)
             ?? throw new Exception("Сессия не найдена");
 
         var scenarioId = session.CurrentScenarioId!.Value;
 
-        // Удаляем предыдущий выбор для этой же части
         var existing = await _db.SelectedPhrases
             .FirstOrDefaultAsync(s => s.SessionId == sessionId && s.ScenarioId == scenarioId && s.PartId == option.PartId);
         if (existing != null) _db.SelectedPhrases.Remove(existing);
 
-        // Сохраняем новый
         _db.SelectedPhrases.Add(new SelectedPhrase
         {
             SessionId = sessionId, ScenarioId = scenarioId,
@@ -77,37 +91,109 @@ public class TrainingService
 
         if (currentIndex >= parts.Length - 1)
         {
-            return new SelectResponse("evaluate", null, null, selected);
+            await EvaluateScenario(sessionId, scenarioId);
+            var queue = JsonSerializer.Deserialize<List<int>>(session.ScenarioQueue!)!;
+            var currentPos = queue.IndexOf(scenarioId);
+            session.CompletedScenarios = currentPos + 1;
+
+            if (currentPos < queue.Count - 1)
+            {
+                var nextId = queue[currentPos + 1];
+                session.CurrentScenarioId = nextId;
+                await _db.SaveChangesAsync();
+
+                var nextScenario = await _db.Scenarios.Include(s => s.RecipientFormat).FirstAsync(s => s.Id == nextId);
+                var nextOpts = await GetOptions(nextId, "opening");
+
+                return new SelectResponse("next_scenario",
+                    new PartDto("opening", "Вступление", 1, 3), nextOpts, selected,
+                    session.CompletedScenarios, session.TotalScenarios, MapScenario(nextScenario));
+            }
+            else
+            {
+                session.Status = "completed";
+                session.CompletedAt = DateTime.UtcNow;
+                await _db.SaveChangesAsync();
+                return new SelectResponse("finished", null, null, selected,
+                    session.CompletedScenarios, session.TotalScenarios, null);
+            }
         }
 
         var nextPartCode = parts[currentIndex + 1];
         var nextPart = await _db.MessageParts.FirstAsync(p => p.Code == nextPartCode);
-        var nextOptions = await GetOptions(scenarioId, nextPartCode);
+        var nextOpts2 = await GetOptions(scenarioId, nextPartCode);
 
         return new SelectResponse("next_part",
-            new PartDto(nextPart.Code, nextPart.Name, currentIndex + 2, 3),
-            nextOptions, selected);
+            new PartDto(nextPart.Code, nextPart.Name, currentIndex + 2, 3), nextOpts2, selected,
+            session.CompletedScenarios, session.TotalScenarios, null);
+    }
+
+    public async Task<FinalResultsResponse> GetFinalResults(Guid sessionId)
+    {
+        var session = await _db.TrainingSessions
+            .Include(s => s.MessageResults).ThenInclude(r => r.Format)
+            .Include(s => s.MessageResults).ThenInclude(r => r.Scenario)
+            .FirstAsync(s => s.Id == sessionId);
+
+        // Средние по всем форматам за всю сессию
+        var formatAverages = await _db.MessageResults
+            .Where(r => r.SessionId == sessionId)
+            .GroupBy(r => new { r.FormatId, r.Format!.Code, r.Format!.Name, r.Format!.Color })
+            .Select(g => new EffectivenessResult(
+                g.Key.Code, g.Key.Name, g.Key.Color ?? "#999",
+                Math.Round(g.Average(r => (double)r.EffectivenessPercent), 1),
+                false
+            ))
+            .ToListAsync();
+
+        // Результаты по каждому сценарию
+        var scenarioResults = await _db.MessageResults
+            .Where(r => r.SessionId == sessionId)
+            .Include(r => r.Scenario)
+            .GroupBy(r => new { r.ScenarioId, r.Scenario!.Title })
+            .Select(g => new ScenarioResultDto(
+                g.Key.ScenarioId, g.Key.Title,
+                g.OrderByDescending(r => r.EffectivenessPercent)
+                 .Select(r => new EffectivenessResult(
+                     r.Format!.Code, r.Format.Name, r.Format.Color ?? "#999",
+                     (double)r.EffectivenessPercent, false
+                 )).ToList()
+            ))
+            .ToListAsync();
+
+        return new FinalResultsResponse(
+            formatAverages.OrderByDescending(r => r.Percent).ToList(),
+            scenarioResults, session.TotalScenarios, session.CompletedScenarios);
     }
 
     public async Task<EvaluateResponse> Evaluate(Guid sessionId)
     {
         var session = await _db.TrainingSessions.FindAsync(sessionId)
             ?? throw new Exception("Сессия не найдена");
+        return await EvaluateScenario(sessionId, session.CurrentScenarioId!.Value);
+    }
 
-        var scenarioId = session.CurrentScenarioId!.Value;
+    private async Task<EvaluateResponse> EvaluateScenario(Guid sessionId, int scenarioId)
+    {
         var scenario = await _db.Scenarios.Include(s => s.RecipientFormat).FirstAsync(s => s.Id == scenarioId);
-
         var selectedOptions = await _db.SelectedPhrases
             .Include(s => s.SelectedOption).Include(s => s.Part)
             .Where(s => s.SessionId == sessionId && s.ScenarioId == scenarioId)
-            .OrderBy(s => s.Part!.OrderNumber)
-            .ToListAsync();
+            .OrderBy(s => s.Part!.OrderNumber).ToListAsync();
 
-        var phrases = selectedOptions.Select(s => (
-            (float)s.SelectedOption!.EmotionalScore,
-            (float)s.SelectedOption!.SafetyScore,
-            (float)s.SelectedOption!.StructuralScore
-        )).ToList();
+        var phrases = selectedOptions
+            .Where(s => s.SelectedOption != null)
+            .Select(s => (
+                (float)s.SelectedOption!.EmotionalScore,
+                (float)s.SelectedOption!.SafetyScore,
+                (float)s.SelectedOption!.StructuralScore
+            )).ToList();
+
+        if (phrases.Count < 3)
+        {
+            return new EvaluateResponse(scenarioId, new List<SelectedPhraseInfo>(),
+                new List<EffectivenessResult>(), null);
+        }
 
         var formats = await _db.Formats.OrderBy(f => f.SortOrder).ToListAsync();
         var results = new List<EffectivenessResult>();
@@ -125,8 +211,6 @@ public class TrainingService
             });
         }
 
-        session.Status = "completed";
-        session.CompletedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
 
         var selectedDtos = selectedOptions.Select(s => new SelectedPhraseInfo(
@@ -141,10 +225,12 @@ public class TrainingService
     {
         return await _db.PhraseOptions
             .Include(o => o.Format)
-            .Where(o => o.ScenarioId == scenarioId && o.Part!.Code == partCode)
+            .Where(o => o.ScenarioId == scenarioId && o.Part!.Code == partCode && !string.IsNullOrEmpty(o.Text)) // ← фильтр
             .Select(o => new PhraseOptionDto(o.Id, o.Text, o.Format!.Code, o.Format.Name, o.Format.Color ?? "#999"))
             .ToListAsync();
     }
+    
+    
 
     private async Task<List<SelectedPhraseInfo>> GetSelectedPhrases(Guid sessionId, int scenarioId)
     {
@@ -156,4 +242,8 @@ public class TrainingService
                 s.SelectedOption.Format!.Code, s.SelectedOption.Format.Color ?? "#999"))
             .ToListAsync();
     }
+
+    private static ScenarioDto MapScenario(Scenario s) => new(
+        s.Id, s.Title, s.SituationText, s.RecipientName,
+        s.RecipientFormat?.Code ?? "", s.RecipientFormat?.Name ?? "", s.HintText ?? "");
 }

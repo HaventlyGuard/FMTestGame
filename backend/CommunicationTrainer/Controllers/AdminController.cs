@@ -44,12 +44,17 @@ public class AdminController : ControllerBase
             .ToListAsync();
     }
     /// <summary>
-    /// Получить всех пользователей
+    /// Получить всех пользователей (с поиском по email)
     /// </summary>
     [HttpGet("users")]
-    public async Task<List<UserAdminDto>> GetUsers()
+    public async Task<List<UserAdminDto>> GetUsers([FromQuery] string? search = null)
     {
-        return await _db.Users
+        var query = _db.Users.AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(search))
+            query = query.Where(u => u.Email.Contains(search) || u.Name.Contains(search));
+
+        return await query
             .OrderByDescending(u => u.CreatedAt)
             .Select(u => new UserAdminDto(
                 u.Id,
@@ -384,6 +389,8 @@ public async Task<FormatFullDto> CreateFormat([FromBody] CreateFormatRequest req
         format.SortOrder
     );
 }
+
+
 
 /// <summary>
 /// Удалить формат

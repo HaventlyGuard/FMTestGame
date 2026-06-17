@@ -1,6 +1,13 @@
 import { useState, useCallback } from 'react';
 import { trainingApi } from '../api/trainingApi';
-import type { Scenario, Part, PhraseOption, SelectedPhraseInfo, EffectivenessResult } from '../types/training';
+import type {
+  Scenario,
+  Part,
+  PhraseOption,
+  SelectedPhraseInfo,
+  EffectivenessResult,
+  FinalResultsResponse,
+} from '../types/training';
 
 export function useTrainingSession() {
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -8,8 +15,18 @@ export function useTrainingSession() {
   const [currentPart, setCurrentPart] = useState<Part | null>(null);
   const [options, setOptions] = useState<PhraseOption[]>([]);
   const [selectedPhrases, setSelectedPhrases] = useState<SelectedPhraseInfo[]>([]);
-  const [results, setResults] = useState<EffectivenessResult[] | null>(null);
-  const [bestMatch, setBestMatch] = useState<EffectivenessResult | null>(null);
+  const [allOptions, setAllOptions] = useState<Record<string, PhraseOption[]>>({});
+
+  const [scenarioResult, setScenarioResult] = useState<{
+    results: EffectivenessResult[];
+    bestMatch: EffectivenessResult | null;
+  } | null>(null);
+
+  const [pendingScenario, setPendingScenario] = useState<Scenario | null>(null);
+  const [pendingOptions, setPendingOptions] = useState<PhraseOption[]>([]);
+
+  const [finalResults, setFinalResults] = useState<FinalResultsResponse | null>(null);
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -23,37 +40,136 @@ export function useTrainingSession() {
       setCurrentPart(data.currentPart);
       setOptions(data.options);
       setSelectedPhrases([]);
-      setResults(null);
-      setBestMatch(null);
+      setAllOptions({ [data.currentPart.code]: data.options });
+      setScenarioResult(null);
+      setFinalResults(null);
+      setPendingScenario(null);
+      setPendingOptions([]);
     } catch {
-      setError('Ошибка при старте. Бэкенд запущен?');
+      setError('Ошибка. Бэкенд запущен?');
     }
     setLoading(false);
   }, []);
 
-  const select = useCallback(async (optionId: number) => {
-    if (!sessionId) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await trainingApi.select(sessionId, optionId);
-      setSelectedPhrases(data.selectedPhrases);
+  const select = useCallback(
+    async (optionId: number) => {
+      if (!sessionId) return;
+      setLoading(true);
+      try {
+        const data = await trainingApi.select(sessionId, optionId);
+        setSelectedPhrases(data.selectedPhrases);
 
-      if (data.nextAction === 'next_part') {
-        setCurrentPart(data.nextPart);
-        setOptions(data.options!);
-      } else {
-        const evalData = await trainingApi.evaluate(sessionId);
-        setResults(evalData.results);
-        setBestMatch(evalData.bestMatch);
-        setCurrentPart(null);
-        setOptions([]);
+        if (data.nextAction === 'next_part') {
+          setCurrentPart(data.nextPart);
+          const newOpts = data.options!;
+          setOptions(newOpts);
+          setAllOptions((prev) => ({ ...prev, [data.nextPart!.code]: newOpts }));
+        } else if (data.nextAction === 'next_scenario') {
+          const evalData = await trainingApi.evaluate(sessionId);
+          setScenarioResult({
+            results: evalData.results,
+            bestMatch: evalData.bestMatch,
+          });
+          setPendingScenario(data.nextScenario);
+          setPendingOptions(data.options!);
+          setCurrentPart(null);
+          setOptions([]);
+        } else if (data.nextAction === 'finished') {
+          const final = await trainingApi.getResults(sessionId);
+          setFinalResults(final);
+          setScenarioResult(null);
+          setPendingScenario(null);
+          setCurrentPart(null);
+          setOptions([]);
+        }
+      } catch {
+        setError('Ошибка при выборе');
       }
+      setLoading(false);
+    },
+    [sessionId]
+  );
+
+  const switchPart = useCallback(
+    (partCode: string) => {
+      const cached = allOptions[partCode];
+      if (cached) {
+        setOptions(cached);
+        const partNames: Record<string, string> = {
+          opening: 'Вступление',
+          middle: 'Основная часть',
+          closing: 'Завершение',
+        };
+        const stepNumber = ['opening', 'middle', 'closing'].indexOf(partCode) + 1;
+        setCurrentPart({ code: partCode, name: partNames[partCode], stepNumber, totalSteps: 3 });
+      }
+    },
+    [allOptions]
+  );
+
+  const replayScenario = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await trainingApi.start(scenario?.id);
+      setSessionId(data.sessionId);
+      setScenario(data.scenario);
+      setCurrentPart(data.currentPart);
+      setOptions(data.options);
+      setSelectedPhrases([]);
+      setAllOptions({ [data.currentPart.code]: data.options });
+      setScenarioResult(null);
+      setPendingScenario(null);
+      setPendingOptions([]);
     } catch {
-      setError('Ошибка при выборе варианта');
+      setError('Ошибка');
     }
     setLoading(false);
-  }, [sessionId]);
+  }, [scenario]);
 
-  return { sessionId, scenario, currentPart, options, selectedPhrases, results, bestMatch, loading, error, start, select };
+
+  const finishEarly = useCallback(async () => {
+  if (!sessionId) return;
+  setLoading(true);
+  try {
+    const final = await trainingApi.getResults(sessionId);
+    setFinalResults(final);
+    setScenarioResult(null);
+    setPendingScenario(null);
+    setCurrentPart(null);
+    setOptions([]);
+  } catch {
+    setError('Ошибка');
+  }
+  setLoading(false);
+}, [sessionId]);
+
+  const nextScenario = useCallback(() => {
+    setScenario(pendingScenario);
+    setCurrentPart({ code: 'opening', name: 'Вступление', stepNumber: 1, totalSteps: 3 });
+    setOptions(pendingOptions);
+    setSelectedPhrases([]);
+    setScenarioResult(null);
+    setAllOptions({ opening: pendingOptions });
+    setPendingScenario(null);
+    setPendingOptions([]);
+  }, [pendingScenario, pendingOptions]);
+
+  return {
+    sessionId,
+    scenario,
+    currentPart,
+    options,
+    selectedPhrases,
+    scenarioResult,
+    finalResults,
+    pendingScenario,
+    loading,
+    error,
+    start,
+    select,
+    switchPart,
+    replayScenario,
+    nextScenario,
+    finishEarly,
+  };
 }

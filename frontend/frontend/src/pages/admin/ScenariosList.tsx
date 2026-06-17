@@ -8,6 +8,7 @@ export function ScenariosList() {
   const [formats, setFormats] = useState<Format[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
+  const [showEmpty, setShowEmpty] = useState(false); // ← показывать пустые
 
   const load = async () => {
     setLoading(true);
@@ -33,10 +34,26 @@ export function ScenariosList() {
 
   if (loading) return <div className="text-center py-12 text-gray-400">Загрузка...</div>;
 
+  // Фильтр: показывать только заполненные, если галочка не включена
+  const visibleScenarios = showEmpty
+    ? scenarios
+    : scenarios.filter(s => s.filledPhrases > 0);
+
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-bold">Сценарии ({scenarios.length})</h2>
+        <div className="flex items-center gap-4">
+          <h2 className="text-2xl font-bold">Сценарии ({visibleScenarios.length})</h2>
+          <label className="flex items-center gap-2 text-sm text-gray-400 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={showEmpty}
+              onChange={e => setShowEmpty(e.target.checked)}
+              className="rounded accent-orange-500"
+            />
+            Показывать пустые
+          </label>
+        </div>
         <button onClick={() => setShowCreate(true)} className="bg-orange-500 hover:bg-orange-600 px-5 py-2.5 rounded-lg font-semibold text-sm transition">+ Новый</button>
       </div>
 
@@ -45,7 +62,7 @@ export function ScenariosList() {
       )}
 
       <div className="grid gap-3">
-        {scenarios.map(s => (
+        {visibleScenarios.map(s => (
           <div key={s.id} className="bg-gray-800 rounded-xl p-5 border border-gray-700">
             <div className="flex justify-between items-center">
               <div>
@@ -59,6 +76,11 @@ export function ScenariosList() {
             </div>
           </div>
         ))}
+        {visibleScenarios.length === 0 && (
+          <p className="text-center py-12 text-gray-500">
+            {showEmpty ? 'Нет сценариев. Создайте первый.' : 'Нет заполненных сценариев. Включите "Показывать пустые" или создайте новый.'}
+          </p>
+        )}
       </div>
     </div>
   );

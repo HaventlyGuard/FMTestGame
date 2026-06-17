@@ -10,16 +10,11 @@ public record PartDto(string Code, string Name, int StepNumber, int TotalSteps);
 
 public record PhraseOptionDto(int Id, string Text, string FormatCode, string FormatName, string FormatColor);
 
-public record StartResponse(Guid SessionId, ScenarioDto Scenario, PartDto CurrentPart, List<PhraseOptionDto> Options);
-
 public record SelectRequest(Guid SessionId, int OptionId);
 
 public record SelectedPhraseInfo(string PartCode, string PartName, string Text, string FormatCode, string FormatColor);
 
-public record SelectResponse(
-    string NextAction, PartDto? NextPart, List<PhraseOptionDto>? Options,
-    List<SelectedPhraseInfo> SelectedPhrases
-);
+
 
 public record EvaluateRequest(Guid SessionId);
 
@@ -49,3 +44,31 @@ public record ContinueResponse(
         string NextAction, PartDto? NextPart,
         List<PhraseOptionDto>? Options, List<SelectedPhraseInfo> SelectedPhrases
     );
+
+public record StartResponse(
+    Guid SessionId, ScenarioDto Scenario, PartDto CurrentPart,
+    List<PhraseOptionDto> Options,
+    int CompletedScenarios, int TotalScenarios  // ← добавить
+);
+
+public record SelectResponse(
+    string NextAction, // "next_part" | "next_scenario" | "finished"
+    PartDto? NextPart,
+    List<PhraseOptionDto>? Options,
+    List<SelectedPhraseInfo> SelectedPhrases,
+    int CompletedScenarios, int TotalScenarios,  // ← добавить
+    ScenarioDto? NextScenario                     // ← добавить (для next_scenario)
+);
+
+public record FinalResultsResponse(
+    List<EffectivenessResult> FormatAverages,
+    List<ScenarioResultDto> ScenarioResults,
+    int TotalScenarios,
+    int CompletedScenarios
+);
+
+public record ScenarioResultDto(
+    int ScenarioId,
+    string ScenarioTitle,
+    List<EffectivenessResult> Results
+);

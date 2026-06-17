@@ -33,6 +33,9 @@ public class ScoringEngine
 
     public float Evaluate(List<(float E, float S, float T)> phrases, string targetCode)
     {
+        if (phrases.Count != 3)
+            return 0;
+
         var profile = Profiles[targetCode];
 
         var scores = phrases.Select(phrase =>

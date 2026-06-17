@@ -1,3 +1,27 @@
+export interface StartResponse {
+  sessionId: string;
+  scenario: Scenario;
+  currentPart: Part;
+  options: PhraseOption[];
+  completedScenarios: number;
+  totalScenarios: number;
+}
+
+export interface SelectResponse {
+  nextAction: 'next_part' | 'next_scenario' | 'finished';
+  nextPart: Part | null;
+  options: PhraseOption[] | null;
+  selectedPhrases: SelectedPhraseInfo[];
+  completedScenarios: number;
+  totalScenarios: number;
+  nextScenario: Scenario | null;
+}
+export interface FinalResultsResponse {
+  formatAverages: EffectivenessResult[];
+  scenarioResults: { scenarioId: number; scenarioTitle: string; results: EffectivenessResult[] }[];
+  totalScenarios: number;
+  completedScenarios: number;
+}
 export interface Scenario {
   id: number;
   title: string;
@@ -46,12 +70,7 @@ export interface StartResponse {
   options: PhraseOption[];
 }
 
-export interface SelectResponse {
-  nextAction: 'next_part' | 'evaluate';
-  nextPart: Part | null;
-  options: PhraseOption[] | null;
-  selectedPhrases: SelectedPhraseInfo[];
-}
+
 
 export interface EvaluateResponse {
   scenarioId: number;

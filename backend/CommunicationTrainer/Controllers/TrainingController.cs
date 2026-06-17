@@ -198,6 +198,10 @@ public async Task<ContinueResponse> ContinueSession(Guid sessionId)
         _db.TrainingSessions.Remove(session);
         await _db.SaveChangesAsync();
     }
+    
+    [HttpGet("results/{sessionId}")]
+    public async Task<FinalResultsResponse> GetResults(Guid sessionId) =>
+        await _service.GetFinalResults(sessionId);
 }
 
 // ==================== НОВЫЕ DTO ====================
