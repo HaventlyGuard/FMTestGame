@@ -30,12 +30,10 @@ function UserApp() {
     );
   }
 
-  // Финальные результаты (все сценарии пройдены)
   if (t.finalResults) {
     return <FinalResultsPage finalResults={t.finalResults} onRestart={() => t.start()} />;
   }
 
-  // Результат одного сценария (есть ещё сценарии впереди)
   if (t.scenarioResult && t.scenario && t.selectedPhrases) {
     return (
       <ScenarioResultPage
@@ -51,7 +49,6 @@ function UserApp() {
     );
   }
 
-  // Тренировка
   if (t.scenario && t.currentPart) {
     return (
       <TrainingPage
@@ -66,7 +63,6 @@ function UserApp() {
     );
   }
 
-  // Стартовая
   return <StartPage onStart={() => t.start()} loading={t.loading} />;
 }
 
@@ -77,7 +73,7 @@ function Layout() {
     <div>
       <header className="bg-gray-800 border-b border-gray-700 px-6 py-3">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <Link to="/" className="text-orange-400 font-bold text-lg">Тренажёр</Link>
+          <button onClick={() => window.location.href = '/'} className="text-orange-400 font-bold text-lg">Тренажёр</button>
           <nav className="flex items-center gap-4">
             {user?.role === 'admin' && (
               <Link to="/admin/scenarios" className="text-gray-400 hover:text-white text-sm">Админка</Link>

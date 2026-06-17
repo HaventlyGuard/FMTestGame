@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { trainingApi } from '../api/trainingApi';
 import type {
   Scenario,
@@ -29,6 +29,14 @@ export function useTrainingSession() {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+  return () => {
+    if (sessionId) {
+      trainingApi.getResults(sessionId).catch(() => {});
+    }
+  };
+}, [sessionId]);
 
   const start = useCallback(async () => {
     setLoading(true);

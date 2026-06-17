@@ -60,10 +60,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = () => {
-    localStorage.removeItem('token');
-    setToken(null);
-    setUser(null);
-  };
+  localStorage.removeItem('token');
+  setToken(null);
+  setUser(null);
+  window.location.href = '/';
+};
 
   return (
     <AuthContext.Provider value={{ user, token, loading, login, register, logout }}>
