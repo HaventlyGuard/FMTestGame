@@ -1,89 +1,38 @@
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell } from 'recharts';
+import { motion } from 'framer-motion';
 import type { FinalResultsResponse } from '../types/training';
+import { AnimatedBackground } from '../components/AnimatedBackground';
 
-interface Props {
-  finalResults: FinalResultsResponse;
-  onRestart: () => void;
-}
+interface Props { finalResults: FinalResultsResponse; onRestart: () => void; }
 
 export function FinalResultsPage({ finalResults, onRestart }: Props) {
-  const chartData = finalResults.formatAverages
-    .filter(r => r.percent > 0)
-    .sort((a, b) => b.percent - a.percent)
-    .map(r => ({
-      name: r.formatCode,
-      fullName: r.formatName,
-      percent: r.percent,
-      color: r.color,
-    }));
-
   return (
-    <div className="min-h-screen bg-gray-900 text-white p-6">
-      <div className="max-w-4xl mx-auto">
-        <h1 className="text-3xl font-bold text-center mb-2">Тренировка завершена!</h1>
-        <p className="text-gray-400 text-center mb-8">
-          Пройдено {finalResults.completedScenarios} из {finalResults.totalScenarios} сценариев
-        </p>
+    <div className="min-h-screen relative bg-white">
+      <AnimatedBackground />
+      <div className="relative z-10 max-w-2xl mx-auto px-6 py-12">
+        <h1 className="text-3xl font-extralight text-slate-800 text-center mb-2">Тренировка завершена</h1>
+        <p className="text-slate-400 text-center mb-8">Пройдено {finalResults.completedScenarios} из {finalResults.totalScenarios} сценариев</p>
 
-        {/* Общий результат */}
-        <div className="bg-gray-800 rounded-2xl p-8 border border-gray-700 text-center mb-8">
-          <p className="text-gray-400 mb-2">Ваш общий результат</p>
-          <p className="text-5xl font-bold text-orange-400">{finalResults.overallAverage}%</p>
-          <p className="text-gray-500 text-sm mt-2">
-            Средний % попадания в нужные форматы за {finalResults.completedScenarios} сценариев
-          </p>
+        <div className="glass p-8 text-center mb-8">
+          <p className="text-slate-400 mb-2">Ваш общий результат</p>
+          <p className="text-7xl font-extralight gradient-text">{finalResults.overallAverage}%</p>
+          <p className="text-slate-400 text-sm mt-2">Средний % попадания в нужные форматы</p>
         </div>
 
-        {/* Диаграмма */}
-        {chartData.length > 0 && (
-          <div className="bg-gray-800 rounded-2xl p-6 mb-8 border border-gray-700 flex justify-center">
-            <BarChart width={700} height={400} data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#333" />
-              <XAxis dataKey="name" stroke="#999" />
-              <YAxis domain={[0, 100]} stroke="#999" tickFormatter={v => `${v}%`} />
-              <Tooltip
-                contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px' }}
-                formatter={(v: any) => [`${v}%`, 'Эффективность']}
-              />
-              <Bar dataKey="percent" radius={[4, 4, 0, 0]}>
-                {chartData.map((entry, i) => (
-                  <Cell key={i} fill={entry.color} />
-                ))}
-              </Bar>
-            </BarChart>
-          </div>
-        )}
-
-        {/* Таблица */}
-        <div className="bg-gray-800 rounded-2xl p-6 mb-8 border border-gray-700">
-          <h2 className="text-lg font-semibold mb-4">Средний % попадания по форматам</h2>
-          <div className="space-y-3">
-            {finalResults.formatAverages
-              .sort((a, b) => b.percent - a.percent)
-              .map(r => (
-                <div key={r.formatCode} className="flex items-center gap-4">
-                  <span className="w-12 text-sm text-gray-400">{r.formatCode}</span>
-                  <span className="w-44 text-sm">{r.formatName}</span>
-                  <div className="flex-1 bg-gray-700 rounded-full h-4">
-                    <div
-                      className="h-4 rounded-full"
-                      style={{ width: `${r.percent}%`, backgroundColor: r.color }}
-                    />
-                  </div>
-                  <span className="w-12 text-right font-bold">{r.percent}%</span>
-                </div>
-              ))}
-          </div>
+        <div className="glass p-6 mb-8">
+          <h3 className="text-sm text-slate-400 mb-4">По форматам</h3>
+          {finalResults.formatAverages.sort((a, b) => b.percent - a.percent).map(r => (
+            <div key={r.formatCode} className="flex items-center gap-3 mb-2">
+              <span className="w-10 text-sm text-slate-400">{r.formatCode}</span>
+              <span className="w-36 text-sm text-slate-500 truncate">{r.formatName}</span>
+              <div className="flex-1 bg-slate-100 rounded-full h-2"><div className="h-2 rounded-full" style={{ width: `${r.percent}%`, backgroundColor: r.color }} /></div>
+              <span className="w-10 text-right text-sm font-medium">{r.percent}%</span>
+            </div>
+          ))}
         </div>
 
-        {/* Кнопка */}
         <div className="text-center">
-          <button
-            onClick={onRestart}
-            className="bg-orange-500 hover:bg-orange-600 px-10 py-4 rounded-xl font-semibold text-lg transition"
-          >
-            Попробовать снова
-          </button>
+          <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} onClick={onRestart}
+            className="bg-slate-900 hover:bg-slate-800 text-white px-10 py-4 rounded-2xl font-medium text-lg transition">Попробовать снова</motion.button>
         </div>
       </div>
     </div>

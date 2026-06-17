@@ -15,7 +15,9 @@ export interface SelectResponse {
   completedScenarios: number;
   totalScenarios: number;
   nextScenario: Scenario | null;
+  scenarioResults: EffectivenessResult[] | null;
 }
+
 export interface FinalResultsResponse {
   formatAverages: EffectivenessResult[];
   scenarioResults: { scenarioId: number; scenarioTitle: string; results: EffectivenessResult[] }[];

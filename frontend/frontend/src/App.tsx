@@ -19,10 +19,10 @@ function UserApp() {
 
   if (t.error) {
     return (
-      <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
+      <div className="min-h-screen relative bg-white flex items-center justify-center">
         <div className="text-center">
-          <p className="text-red-400 text-xl mb-4">{t.error}</p>
-          <button onClick={() => t.start()} className="bg-orange-500 px-6 py-3 rounded-xl">
+          <p className="text-red-500 text-xl mb-4">{t.error}</p>
+          <button onClick={() => t.start()} className="bg-slate-900 text-white px-6 py-3 rounded-2xl font-medium">
             Попробовать снова
           </button>
         </div>
@@ -70,21 +70,23 @@ function Layout() {
   const { user, logout } = useAuth();
 
   return (
-    <div>
-      <header className="bg-gray-800 border-b border-gray-700 px-6 py-3">
+    <div className="min-h-screen relative bg-white">
+      <header className="glass sticky top-0 z-50 mx-4 mt-4 px-6 py-3">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <button onClick={() => window.location.href = '/'} className="text-orange-400 font-bold text-lg">Тренажёр</button>
+          <button onClick={() => window.location.href = '/'} className="text-xl font-light text-slate-800">
+            <span className="gradient-text font-normal">Тренажёр</span>
+          </button>
           <nav className="flex items-center gap-4">
             {user?.role === 'admin' && (
-              <Link to="/admin/scenarios" className="text-gray-400 hover:text-white text-sm">Админка</Link>
+              <Link to="/admin/scenarios" className="text-slate-500 hover:text-slate-800 text-sm transition">Админка</Link>
             )}
             {user ? (
               <div className="flex items-center gap-3">
-                <span className="text-gray-300 text-sm">{user.name}</span>
-                <button onClick={logout} className="text-gray-400 hover:text-white text-sm">Выйти</button>
+                <span className="text-slate-500 text-sm">{user.name}</span>
+                <button onClick={logout} className="text-slate-400 hover:text-slate-700 text-sm transition">Выйти</button>
               </div>
             ) : (
-              <Link to="/auth" className="text-gray-400 hover:text-white text-sm">Войти</Link>
+              <Link to="/auth" className="text-slate-500 hover:text-slate-800 text-sm transition">Войти</Link>
             )}
           </nav>
         </div>
